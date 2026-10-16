@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Church Family Feud</title>
+<style>
+:root{--bg:#f7f3ea;--card:#fff;--tx:#1d2433;--mu:#667085;--ac:#7a2e8e;--ac2:#e6a817;--bd:#e2dccd;--ok:#1f8a4c;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#15121b;--card:#211c2b;--tx:#f1edf7;--mu:#a69fb5;--ac:#c58be0;--ac2:#f0c04a;--bd:#3a3248;--ok:#4cc784;color-scheme:dark}}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--tx);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 4px;color:var(--ac)}h2{font-size:1.15rem;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:16px;margin:12px 0}
+.mu{color:var(--mu);font-size:.9rem}
+button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:12px 14px;width:100%;text-align:left;margin:6px 0}
+button.p{background:var(--ac);color:#fff;border-color:var(--ac);text-align:center;font-weight:600}
+button.sel{border-color:var(--ac2);box-shadow:0 0 0 2px var(--ac2)}
+button:disabled{opacity:.5}
+input{font:inherit;width:100%;padding:12px;border-radius:10px;border:1px solid var(--bd);background:var(--bg);color:var(--tx);margin:6px 0}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.sc{display:flex;gap:10px}.sc div{flex:1;text-align:center;border-radius:12px;padding:12px;background:var(--bg);border:1px solid var(--bd)}
+.sc b{display:block;font-size:2rem;color:var(--ac2)}
+.bar{position:relative;background:var(--bg);border-radius:8px;margin:6px 0;padding:8px 10px;overflow:hidden;border:1px solid var(--bd)}
+.bar i{position:absolute;left:0;top:0;bottom:0;background:var(--ac);opacity:.25}
+.bar .in{position:relative;display:flex;justify-content:space-between;gap:8px}
+.bar.win{border-color:var(--ok)}
+.tag{display:inline-block;font-size:.75rem;padding:2px 8px;border-radius:99px;background:var(--ac);color:#fff}
+a{color:var(--ac)}
+</style></head><body><main>
+<h1>Church Family Feud</h1><div id="app" class="mu">Connecting...</div>
+<p class="mu" id="foot"><a href="#" id="hl">Host login</a></p>
+</main>
+<script>
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let cid=null;try{cid=localStorage.getItem('feud_cid');if(!cid){cid=Math.random().toString(36).slice(2)+Date.now().toString(36);localStorage.setItem('feud_cid',cid)}}catch(e){cid=Math.random().toString(36).slice(2)}
+let ws,V=null,sel=null,lastKey='';
+const app=document.getElementById('app');
+const nm=t=>V.names[t];
+
+function connect(){
+ ws=new WebSocket((location.protocol==='https:'?'wss://':'ws://')+location.host);
+ ws.onopen=()=>{send({t:'hello',cid});let pw=null;try{pw=sessionStorage.getItem('feud_pw')}catch(e){}if(pw)send({t:'host',pw})};
+ ws.onmessage=e=>{const n=JSON.parse(e.data);const k=(n.turn||0)+n.phase;if(k!==lastKey){sel=null;lastKey=k}V=n;render()};
+ ws.onclose=()=>{app.insertAdjacentHTML('afterbegin','<p class="mu">Reconnecting...</p>');setTimeout(connect,1500)};
+}
+const send=o=>{if(ws&&ws.readyState===1)ws.send(JSON.stringify(o))};
+
+function options(opts,chosen,act){return opts.map((o,i)=>'<button class="'+(chosen===i?'sel':'')+'" data-a="'+act+'" data-v="'+i+'">'+esc(o)+'</button>').join('')}
+function result(r){
+ const mx=Math.max(1,...r.counts);
+ let h='<div class="card"><h2>'+esc(r.qtext)+'</h2><p class="mu">'+esc(nm(r.team))+' answered: <b>'+(r.opt>=0?esc(r.opts[r.opt]):'Something else')+'</b>, earning <b>'+r.pts+'</b> point'+(r.pts===1?'':'s')+'.</p>';
+ r.counts.forEach((c,i)=>h+='<div class="bar'+(i===r.opt?' win':'')+'"><i style="width:'+(c/mx*100)+'%"></i><div class="in"><span>'+esc(r.opts[i])+'</span><b>'+c+'</b></div></div>');
+ return h+'</div>';
+}
+function board(){return V.scores?'<div class="card"><h2>Scoreboard</h2><div class="sc"><div>'+esc(nm('A'))+'<b>'+V.scores.A+'</b></div><div>'+esc(nm('B'))+'<b>'+V.scores.B+'</b></div></div></div>':''}
+
+function render(){
+ if(!V)return;
+ const f=document.activeElement;if(f&&f.tagName==='INPUT')return;
+ const p=V.me,t=V.turn,q=V.q;let h='';
+ const isTeam=p&&p.role!=='aud';
+ if(V.host){
+  const r=V.roster;
+  h+='<div class="card"><span class="tag">Host</span><p class="mu">'+r.A+' in '+esc(nm('A'))+', '+r.B+' in '+esc(nm('B'))+', '+r.aud+' in the audience.</p>';
+  if(V.phase==='lobby'||V.phase==='done'){
+   h+='<div class="row"><input id="nA" value="'+esc(nm('A'))+'" data-n="1"><input id="nB" value="'+esc(nm('B'))+'" data-n="1"></div>';
+   h+='<button class="p" data-a="start">'+(V.phase==='done'?'Start a new game':'Shuffle questions and start')+'</button>';
+   if(V.phase==='done')h+='<button data-a="reset">Back to lobby</button>';
+  }
+  if(V.phase==='open'){
+   h+='<p><b>Question '+(t+1)+' of 10</b>. Turn: '+esc(nm(V.team))+'</p><h2>'+esc(q.text)+'</h2>';
+   q.opts.forEach((o,i)=>h+='<div class="bar"><div class="in"><span>'+esc(o)+'</span><b>'+V.live[i]+'</b></div></div>');
+   h+='<p class="mu">'+V.audCount+' audience answers so far. Waiting for the team to answer.</p>';
+  }
+  if(V.phase==='revealed')h+=t<9?'<button class="p" data-a="next">Next question</button>':'<button class="p" data-a="end">Finish game</button>';
+  h+='</div>';
+ }else if(!p){
+  h+='<div class="card"><h2>Join the game</h2>';
+  if(V.phase!=='lobby')h+='<p class="mu">A game is already in progress. Please wait for the next one.</p>';
+  else h+='<input id="jn" placeholder="Your name" maxlength="30"><button data-a="join" data-v="A">Join '+esc(nm('A'))+'</button><button data-a="join" data-v="B">Join '+esc(nm('B'))+'</button><button data-a="join" data-v="aud">Join as audience</button>';
+  app.innerHTML=h+'</div>';return;
+ }else h+='<p class="mu">'+esc(p.name)+' ('+(p.role==='aud'?'Audience':esc(nm(p.role)))+')</p>';
+
+ if(!V.host&&V.phase==='lobby')h+='<div class="card">Waiting for the host to start the game.</div>';
+ if(V.phase==='open'&&!V.host){
+  h+='<div class="card"><p><span class="tag">Question '+(t+1)+' of 10</span> Turn: <b>'+esc(nm(V.team))+'</b></p><h2>'+esc(q.text)+'</h2>';
+  if(isTeam){
+   if(p.role!==V.team)h+='<p class="mu">It is the other team\'s turn. Please wait.</p>';
+   else{h+=options(q.opts,sel,'tsel')+'<button data-a="tsel" data-v="-1" class="'+(sel===-1?'sel':'')+'">Something else</button><button class="p" data-a="lock" '+(sel===null?'disabled':'')+'>Lock in our answer</button>'}
+  }else{
+   h+='<p class="mu">What do you think people said? Pick one answer. You may change it until the team answers.</p>'+options(q.opts,V.pick===undefined?-9:V.pick,'aud');
+  }
+  h+='</div>';
+ }
+ if(V.phase==='revealed'||V.phase==='done'){
+  if(V.host||(p&&p.role==='aud')){
+   if(V.last)h+=result(V.last);
+   h+=board();
+   if(V.phase==='done'&&V.scores){const a=V.scores.A,b=V.scores.B;h+='<div class="card"><h2>'+(a===b?'It is a tie!':esc(nm(a>b?'A':'B'))+' wins!')+'</h2></div>'}
+  }else h+='<div class="card">'+(V.phase==='done'?'The game is over. Look to the screen for the final scores.':'Your answer has been recorded. Please wait for the host.')+'</div>';
+ }
+ app.className='';app.innerHTML=h;
+}
+
+document.addEventListener('click',e=>{
+ if(e.target.id==='hl'){e.preventDefault();const pw=prompt('Host password');if(pw){try{sessionStorage.setItem('feud_pw',pw)}catch(x){}send({t:'host',pw})}return}
+ const b=e.target.closest('button[data-a]');if(!b)return;
+ const a=b.dataset.a,v=+b.dataset.v;
+ if(a==='join'){const n=document.getElementById('jn').value.trim();if(!n){document.getElementById('jn').focus();return}send({t:'join',name:n,role:b.dataset.v})}
+ else if(a==='aud')send({t:'aud',opt:v});
+ else if(a==='tsel'){sel=v;render()}
+ else if(a==='lock'&&sel!==null)send({t:'team',opt:sel});
+ else if(['start','next','end','reset'].includes(a))send({t:a});
+});
+document.addEventListener('change',e=>{
+ if(e.target.dataset.n&&V&&V.host)send({t:'names',A:document.getElementById('nA').value.trim(),B:document.getElementById('nB').value.trim()});
+});
+connect();
+</script></body></html>
